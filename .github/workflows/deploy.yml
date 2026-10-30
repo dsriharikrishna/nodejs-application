@@ -28,9 +28,6 @@ jobs:
             echo "🐳 Rebuilding and restarting containers..."
             sudo docker compose up -d --build
 
-            echo "📦 Running Prisma database migrations..."
-            sudo docker compose exec -T express-app npx prisma migrate deploy
-
             echo "🧹 Removing dangling images..."
             sudo docker image prune -f
 
