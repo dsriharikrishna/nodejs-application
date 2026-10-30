@@ -17,7 +17,7 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true }));
 
   // Routes
-  app.use('/', router);
+  app.use('/v1/api', router);
 
   // 404 & error handlers (must come last)
   app.use(notFound);

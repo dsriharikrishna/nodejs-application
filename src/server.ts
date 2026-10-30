@@ -8,8 +8,8 @@ const PORT = config.PORT ?? 3001;
 
 const server = app.listen(PORT, () => {
   console.log(`🚀 express-app running on port ${PORT}`);
-  console.log(`📋 Health: http://localhost:${PORT}/api/express/health`);
-  console.log(`📦 Items:  http://localhost:${PORT}/api/express/items`);
+  console.log(`📋 Health: http://localhost:${PORT}/v1/api/health`);
+  console.log(`📦 Items:  http://localhost:${PORT}/v1/api/items`);
   console.log(`🌍 Environment: ${config.NODE_ENV}`);
 });
 

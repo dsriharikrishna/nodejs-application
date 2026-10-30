@@ -1,10 +1,10 @@
 # ── Stage 1: builder ─────────────────────────────────────────────────────────
-FROM node:24-alpine AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Install openssl for Prisma binary generation on Alpine
-RUN apk add --no-cache openssl
+# Install openssl for Prisma
+RUN apt-get update -y && apt-get install -y openssl
 
 # Enable pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
@@ -25,18 +25,18 @@ COPY src ./src
 RUN pnpm run build
 
 # ── Stage 2: production runner ───────────────────────────────────────────────
-FROM node:24-alpine AS runner
+FROM node:20-slim AS runner
 
 WORKDIR /app
 
-# Install openssl on runner stage
-RUN apk add --no-cache openssl
+# Install openssl and curl/wget for healthcheck
+RUN apt-get update -y && apt-get install -y openssl curl && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
 ENV PORT=3001
 
 # Create unprivileged application user
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 # Copy production files and dependencies from builder
 COPY --from=builder /app/package.json ./package.json
@@ -49,6 +49,7 @@ USER appuser
 EXPOSE 3001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD wget -qO- http://localhost:3001/health || exit 1
+  CMD curl -f http://localhost:3001/v1/api/health || exit 1
 
 CMD ["node", "dist/server.js"]
+
