@@ -4,7 +4,7 @@ import { prisma } from '../../shared/db/prisma';
 export const healthController = {
   check(_req: Request, res: Response): void {
     res.json({
-      status: 'ok',
+      status: 'okay',
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
       service: 'express-app',
