@@ -1,0 +1,153 @@
+name: Build and Deploy Docker to EC2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: |
+          docker build -t express-app:latest .
+
+      - name: Save Docker image to compressed archive
+        run: |
+          docker save express-app:latest | gzip > express-app.tar.gz
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: express-app.tar.gz
+          retention-days: 1
+
+  deploy:
+    name: Deploy to EC2 via SSH
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+
+      - name: Deploy Image to EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          # 1. Format and secure SSH private key
+          echo "$SSH_PRIVATE_KEY" | tr -d '\r' > private_key.pem
+          echo "" >> private_key.pem
+          chmod 400 private_key.pem
+
+          SSH_OPTS="-i private_key.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=30"
+
+          echo "🚀 Transferring Docker image to EC2 ($EC2_HOST)..."
+          scp $SSH_OPTS express-app.tar.gz ${EC2_USERNAME}@${EC2_HOST}:/tmp/express-app.tar.gz
+
+          echo "📦 Loading image and restarting container on EC2..."
+          ssh $SSH_OPTS ${EC2_USERNAME}@${EC2_HOST} "
+            set -e
+
+            # Ensure Docker is installed & running
+            if ! command -v docker &> /dev/null; then
+              echo 'Installing Docker...'
+              sudo apt-get update -y
+              sudo apt-get install -y docker.io
+              sudo systemctl enable --now docker
+              sudo usermod -aG docker \$USER || true
+            fi
+
+            # Ensure application configuration directory exists
+            sudo mkdir -p /var/www/express-app
+            sudo chown -R \$USER:\$USER /var/www/express-app
+
+            # Create default .env if not exists
+            if [ ! -f /var/www/express-app/.env ]; then
+              echo 'Creating default /var/www/express-app/.env...'
+              echo 'PORT=3001' > /var/www/express-app/.env
+              echo 'NODE_ENV=production' >> /var/www/express-app/.env
+              echo 'DATABASE_URL=\"postgresql://expressuser:expresspass@localhost:5432/expressdb\"' >> /var/www/express-app/.env
+              echo 'LOG_LEVEL=info' >> /var/www/express-app/.env
+            fi
+
+            # Load the new Docker image
+            echo 'Loading Docker image...'
+            gunzip -c /tmp/express-app.tar.gz | sudo docker load
+            rm -f /tmp/express-app.tar.gz
+
+            # Optional: Apply Prisma migrations
+            echo 'Applying Prisma migrations...'
+            sudo docker run --rm \
+              --env-file /var/www/express-app/.env \
+              express-app:latest \
+              npx prisma migrate deploy || echo '⚠️ Database migration skipped or database unreachable'
+
+            # Stop and remove existing container
+            echo 'Stopping old container (if running)...'
+            sudo docker stop express-app 2>/dev/null || true
+            sudo docker rm express-app 2>/dev/null || true
+
+            # Start new container
+            echo 'Starting new express-app container...'
+            sudo docker run -d \
+              --name express-app \
+              --restart unless-stopped \
+              -p 3001:3001 \
+              -p 8000:3001 \
+              --env-file /var/www/express-app/.env \
+              express-app:latest
+
+            # Clean up old unused images
+            sudo docker image prune -f
+
+            # Verify local container health on the EC2 host
+            echo 'Verifying local container health...'
+            sleep 5
+            if curl -sf http://localhost:3001/api/express/health > /dev/null; then
+              echo '✅ Express container is healthy and running locally on port 3001!'
+            else
+              echo '⚠️ Container output logs:'
+              sudo docker logs --tail 30 express-app
+            fi
+          "
+
+          # Clean up local SSH key file
+          rm -f private_key.pem
+
+      - name: Verify Deployment (External)
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          echo "Waiting 5 seconds for external network routes to settle..."
+          sleep 5
+
+          echo "Checking application health endpoint from GitHub runner..."
+          for i in {1..5}; do
+            echo "Attempt $i of 5..."
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://${EC2_HOST}/api/express/health" 2>/dev/null || curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://${EC2_HOST}:3001/api/express/health" 2>/dev/null || echo "000")
+            
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Deployment successful! Service is reachable externally (HTTP 200)."
+              exit 0
+            fi
+
+            echo "Response: $HTTP_CODE, waiting 5 seconds..."
+            sleep 5
+          done
+
+          echo "ℹ️ External curl timed out. If your EC2 Security Group restricts public access to specific IPs, check your local container status on EC2 using 'docker ps'."

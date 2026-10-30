@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: express-nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - express-app
+    networks:
+      - express-network
+
+  express-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: express-app
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgresql://expressuser:expresspass@postgres:5432/expressdb}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - express-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: express-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: expressdb
+      POSTGRES_USER: expressuser
+      POSTGRES_PASSWORD: expresspass
+    volumes:
+      - express-postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U expressuser -d expressdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - express-network
+
+volumes:
+  express-postgres-data:
+
+networks:
+  express-network:
+    driver: bridge
