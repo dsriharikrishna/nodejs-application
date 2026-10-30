@@ -16,8 +16,8 @@ export function createApp() {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
-  // Routes mounted at /api/express
-  app.use('/api/express', router);
+  // Routes
+  app.use('/', router);
 
   // 404 & error handlers (must come last)
   app.use(notFound);

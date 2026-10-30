@@ -4,10 +4,10 @@ import { createApp } from '../src/app';
 const app = createApp();
 
 describe('Health Routes', () => {
-  it('GET /api/express/health returns 200 with status ok', async () => {
-    const res = await request(app).get('/api/express/health');
+  it('GET /health returns 200 with status okay', async () => {
+    const res = await request(app).get('/health');
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('ok');
+    expect(res.body.status).toBe('okay');
     expect(res.body.uptime).toBeDefined();
     expect(res.body.timestamp).toBeDefined();
     expect(res.body.service).toBe('express-app');
