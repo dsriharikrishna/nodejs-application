@@ -3,6 +3,9 @@ FROM node:24-alpine AS builder
 
 WORKDIR /app
 
+# Install openssl for Prisma binary generation on Alpine
+RUN apk add --no-cache openssl
+
 # Enable pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
@@ -26,6 +29,9 @@ FROM node:24-alpine AS runner
 
 WORKDIR /app
 
+# Install openssl on runner stage
+RUN apk add --no-cache openssl
+
 ENV NODE_ENV=production
 ENV PORT=3001
 
@@ -43,6 +49,6 @@ USER appuser
 EXPOSE 3001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD wget -qO- http://localhost:3001/api/express/health || exit 1
+  CMD wget -qO- http://localhost:3001/health || exit 1
 
 CMD ["node", "dist/server.js"]
