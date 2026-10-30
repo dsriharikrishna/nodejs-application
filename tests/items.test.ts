@@ -37,8 +37,8 @@ jest.mock('@prisma/client', () => {
 const app = createApp();
 
 describe('Items API', () => {
-  it('GET /api/express/items returns 200 with data and meta', async () => {
-    const res = await request(app).get('/items');
+  it('GET /v1/api/items returns 200 with data and meta', async () => {
+    const res = await request(app).get('/v1/api/items');
     expect(res.status).toBe(200);
     expect(res.body.data).toBeDefined();
     expect(Array.isArray(res.body.data)).toBe(true);
@@ -46,46 +46,46 @@ describe('Items API', () => {
     expect(res.body.meta.page).toBe(1);
   });
 
-  it('POST /api/express/items with valid body returns 201', async () => {
+  it('POST /v1/api/items with valid body returns 201', async () => {
     const res = await request(app)
-      .post('/items')
+      .post('/v1/api/items')
       .send({ title: 'New Item', description: 'A test item' });
     expect(res.status).toBe(201);
     expect(res.body.data).toBeDefined();
     expect(res.body.data.id).toBeDefined();
   });
 
-  it('POST /api/express/items missing title returns 400', async () => {
+  it('POST /v1/api/items missing title returns 400', async () => {
     const res = await request(app)
-      .post('/items')
+      .post('/v1/api/items')
       .send({ description: 'No title here' });
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('BAD_REQUEST');
   });
 
-  it('GET /api/express/items/:id returns 200 for existing item', async () => {
-    const res = await request(app).get('/items/test-id-1');
+  it('GET /v1/api/items/:id returns 200 for existing item', async () => {
+    const res = await request(app).get('/v1/api/items/test-id-1');
     expect(res.status).toBe(200);
     expect(res.body.data).toBeDefined();
     expect(res.body.data.id).toBe('test-id-1');
   });
 
-  it('GET /items/:id returns 404 for nonexistent id', async () => {
-    const res = await request(app).get('/items/nonexistent-id');
+  it('GET /v1/api/items/:id returns 404 for nonexistent id', async () => {
+    const res = await request(app).get('/v1/api/items/nonexistent-id');
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('NOT_FOUND');
   });
 
-  it('PUT /items/:id updates item', async () => {
+  it('PUT /v1/api/items/:id updates item', async () => {
     const res = await request(app)
-      .put('/items/test-id-1')
+      .put('/v1/api/items/test-id-1')
       .send({ title: 'Updated Title' });
     expect(res.status).toBe(200);
     expect(res.body.data).toBeDefined();
   });
 
-  it('DELETE /items/:id archives item', async () => {
-    const res = await request(app).delete('/items/test-id-1');
+  it('DELETE /v1/api/items/:id archives item', async () => {
+    const res = await request(app).delete('/v1/api/items/test-id-1');
     expect(res.status).toBe(200);
     expect(res.body.message).toContain('archived');
   });

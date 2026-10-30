@@ -14,10 +14,29 @@ export const healthController = {
 
   async ready(_req: Request, res: Response): Promise<void> {
     try {
-      await prisma.$queryRaw`SELECT 1`;
-      res.json({ status: 'ready', database: 'connected' });
-    } catch {
-      res.status(503).json({ status: 'not ready', database: 'disconnected' });
+      const result = await prisma.$queryRaw<Array<{ connected: number }>>`SELECT 1 as connected`;
+      const isConnected = Array.isArray(result) && result.length > 0;
+
+      if (isConnected) {
+        res.status(200).json({
+          status: 'ready',
+          database: 'connected',
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      res.status(503).json({
+        status: 'not ready',
+        database: 'disconnected',
+        error: 'Database returned no result',
+      });
+    } catch (error) {
+      res.status(503).json({
+        status: 'not ready',
+        database: 'disconnected',
+        error: error instanceof Error ? error.message : 'Unknown database error',
+      });
     }
   },
 };
